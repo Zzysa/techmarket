@@ -1,5 +1,7 @@
+import { v4 as uuidv4 } from "uuid";
+
 const products: {
-    id: number;
+    id: string;
     name: string;
     category: string;
     description: string;
@@ -11,7 +13,7 @@ const products: {
     createdAt: string;
 }[] = [
     {
-        id: 1,
+        id: uuidv4(),
         name: "MacBook Pro 16",
         category: "Laptopy",
         description: "Laptop Apple z procesorem M1 Pro, 16GB RAM, 512GB SSD",
@@ -23,7 +25,7 @@ const products: {
         createdAt: "2023-01-15T14:30:00Z"
     },
     {
-        id: 2,
+        id: uuidv4(),
         name: "Dell XPS 15",
         category: "Laptopy",
         description: "Laptop Dell z procesorem Intel i7, 16GB RAM, 1TB SSD",
@@ -35,7 +37,7 @@ const products: {
         createdAt: "2023-02-10T10:20:00Z"
     },
     {
-        id: 3,
+        id: uuidv4(),
         name: "iPhone 14 Pro",
         category: "Smartfony",
         description: "Smartfon Apple z ekranem 6.1, A16 Bionic, 256GB",
@@ -47,7 +49,7 @@ const products: {
         createdAt: "2023-03-05T08:15:00Z"
     },
     {
-        id: 4,
+        id: uuidv4(),
         name: "Samsung Galaxy S23 Ultra",
         category: "Smartfony",
         description: "Smartfon Samsung z ekranem 6.8, Snapdragon 8 Gen 2, 512GB",
@@ -59,7 +61,7 @@ const products: {
         createdAt: "2023-04-12T12:45:00Z"
     },
     {
-        id: 5,
+        id: uuidv4(),
         name: "Sony WH-1000XM5",
         category: "Słuchawki",
         description: "Bezprzewodowe słuchawki Sony z ANC, 30h pracy na baterii",
