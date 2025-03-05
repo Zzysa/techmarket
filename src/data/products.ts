@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 
-const products: {
+export interface Product {
     id: string;
     name: string;
     category: string;
@@ -11,7 +11,9 @@ const products: {
     imageUrl: string;
     isAvailable: boolean;
     createdAt: string;
-}[] = [
+}
+
+const products: Product[] = [
     {
         id: uuidv4(),
         name: "MacBook Pro 16",
