@@ -1,13 +1,13 @@
-import pool from "../config/db";
+import prisma from "../config/prisma";
 
 export interface Product {
-    id?: number;
+    id: string;
     name: string;
-    category: string;
-    description: string;
+    category?: string;
+    description?: string;
     price: number;
     stockCount: number;
-    brand: string;
+    brand?: string;
     imageUrl?: string;
     isAvailable: boolean;
     createdAt?: Date;
@@ -15,61 +15,40 @@ export interface Product {
 
 const productModel = {
     async getAll(filters: { sortByPrice?: 'ASC' | 'DESC'; isAvailable?: boolean }) {
-        let query = "SELECT * FROM products";
-        const values: any[] = [];
+        const orderBy = filters.sortByPrice ? { price: filters.sortByPrice.toLowerCase() as 'asc' | 'desc' } : undefined;
+        const where = filters.isAvailable !== undefined ? { isAvailable: filters.isAvailable } : undefined;
     
-        if (filters.isAvailable !== undefined) {
-            query += " WHERE isAvailable = $1";
-            values.push(filters.isAvailable);
-        }
-    
-        if (filters.sortByPrice) {
-            query += values.length ? ` ORDER BY price ${filters.sortByPrice}` : ` ORDER BY price ${filters.sortByPrice}`;
-        }
-    
-        const { rows } = await pool.query(query, values);
-        return rows;
+        return await prisma.product.findMany({
+            where,
+            orderBy
+        });
     },
     
     async getById(id: string) {
-        const { rows } = await pool.query("SELECT * FROM products WHERE id = $1;", [id]);
-        return rows[0];
+        return await prisma.product.findUnique({
+            where: { id }
+        });
     },
 
     async create(product: Omit<Product, "id">) {
-        const { rows } = await pool.query(
-            `INSERT INTO products (name, category, description, price, stockCount, brand, imageUrl, isAvailable)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;`,
-            [product.name, product.category, product.description, product.price, product.stockCount, product.brand, product.imageUrl, product.isAvailable]
-        );
-        return rows[0];
+        return await prisma.product.create({
+            data: product
+        });
     },
 
     async update(id: string, updates: Partial<Product>) {
-        const { name, category, description, price, stockCount, brand, imageUrl, isAvailable } = updates;
-      
-        const { rows } = await pool.query(
-          `UPDATE products 
-           SET name = COALESCE($1, name), 
-               category = COALESCE($2, category), 
-               description = COALESCE($3, description),
-               price = COALESCE($4, price), 
-               stockCount = COALESCE($5, stockCount),
-               brand = COALESCE($6, brand),
-               imageUrl = COALESCE($7, imageUrl),
-               isAvailable = COALESCE($8, isAvailable)
-           WHERE id = $9 
-           RETURNING *;`,
-          [name, category, description, price, stockCount, brand, imageUrl, isAvailable, id]
-        );
-      
-        return rows[0];
+        return await prisma.product.update({
+            where: { id },
+            data: updates
+        });
     },
 
     async delete(id: string) {
-        const { rowCount } = await pool.query("DELETE FROM products WHERE id = $1;", [id]);
-        return rowCount ? rowCount > 0 : null;
-    },
+        await prisma.product.delete({
+            where: { id }
+        });
+        return true; 
+    }
 };
 
 export default productModel;
