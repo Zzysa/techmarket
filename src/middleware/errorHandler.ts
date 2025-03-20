@@ -1,15 +1,14 @@
-import { Request, Response, NextFunction} from "express";
+import { Request, Response, NextFunction } from "express";
+import { AppError } from "../middleware/AppError";
 
-export interface Error {
-    status: number
-    message: string
-}
+const errorHandler = (err: AppError, req: Request, res: Response, next: NextFunction) => {
+    const statusCode = err.statusCode || 500;
+    const response = {
+        error: err.message || "Internal Server Error",
+        errors: err.errors || [],
+    };
 
-const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
-    const statusCode = err.status || 500;
-    const message = err.message || "Internal Server Error";
-    
-    res.status(statusCode).json({ error: message });
+    res.status(statusCode).json(response);
 };
 
 export default errorHandler;
