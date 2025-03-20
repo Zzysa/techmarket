@@ -2,41 +2,43 @@ import { Request, Response, NextFunction } from "express";
 import { v4 as uuidv4 } from "uuid";
 import productModel, { Product } from "../module/productModel";
 import prisma from "../config/prisma";
+import { AppError } from "../middleware/AppError";
 
 const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
     const { sortByPrice, isAvailable } = req.query;
+    let errors: string[] = [];
 
     try {
         const filters: {
-            orderBy?: { price: 'asc' | 'desc' };
-            where?: { isAvailable?: boolean };
+            sortByPrice?: 'ASC' | 'DESC';
+            isAvailable?: boolean;
         } = {};
 
         if (sortByPrice) {
             if (sortByPrice === 'ASC') {
-                filters.orderBy = { price: 'asc' };
+                filters.sortByPrice = 'ASC';
             } else if (sortByPrice === 'DESC') {
-                filters.orderBy = { price: 'desc' };
+                filters.sortByPrice ='DESC';
             } else {
-                const error = new Error("Incorrect argument, sortByPrice must be ASC or DESC");
-                (error as any).status = 400;
-                return next(error);
+                errors.push("Incorrect argument, sortByPrice must be ASC or DESC")
             }
         }
 
         if (isAvailable) {
             if (isAvailable === 'true') {
-                filters.where = { isAvailable: true };
+                filters.isAvailable = true ;
             } else if (isAvailable === 'false') {
-                filters.where = { isAvailable: false };
+                filters.isAvailable = false;
             } else {
-                const error = new Error("Incorrect argument, isAvailable must be true or false");
-                (error as any).status = 400;
-                return next(error);
+                errors.push("Incorrect argument, isAvailable must be true or false")
             }
         }
 
-        const products = await prisma.product.findMany(filters);
+        if (errors.length > 0) {
+            return next(new AppError("Validation failed", 400, errors))
+        }
+
+        const products = await productModel.getAll(filters);
         res.json(products);
     } catch (err) {
         next(err);
@@ -48,9 +50,7 @@ const getProduct = async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params;
 
     try {
-        const product = await prisma.product.findUnique({
-            where: { id }
-        });
+        const product = await productModel.getById(id)
 
         if (!product) {
             const error = new Error("Product not found");
@@ -67,20 +67,29 @@ const getProduct = async (req: Request, res: Response, next: NextFunction) => {
 const postProduct = async (req: Request, res: Response, next: NextFunction) => {
     const {
         name, category, description, price, stockCount, brand, imageUrl, isAvailable
-    } = req.body;
+    }: Omit<Product, "id"> = req.body;
+
+    let errors: string[] = [];
+
+    if (!name) errors.push("Name is required");
+    if (!price || isNaN(price) || price < 0) errors.push("Price must be a valid number");
+    if (stockCount !== undefined && stockCount < 0) errors.push("Stock count is required and cannot be negative");
+    if (isAvailable === undefined) errors.push("Product availability is required");
+
+    if (errors.length > 0) {
+        return next(new AppError("Validation failed", 400, errors));
+    }
 
     try {
-        const product = await prisma.product.create({
-            data: {
-                name,
-                category,
-                description,
-                price,
-                stockCount,
-                brand,
-                imageUrl,
-                isAvailable
-            }
+        const product = await productModel.create({
+            name,
+            category,
+            description,
+            price,
+            stockCount,
+            brand,
+            imageUrl,
+            isAvailable
         });
 
         res.status(201).json(product);
@@ -91,21 +100,32 @@ const postProduct = async (req: Request, res: Response, next: NextFunction) => {
 
 const changeProduct = async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params;
-    const { name, category, description, price, stockCount, brand, imageUrl, isAvailable } = req.body;
+    const {
+        name, category, description, price, stockCount, brand, imageUrl, isAvailable 
+    }: Partial<Omit<Product, "id">> = req.body;
+
+    let errors: string[] = [];
+
+    const numericPrice = price !== undefined ? Number(price) : undefined;
+    if (numericPrice !== undefined && (isNaN(numericPrice) || numericPrice < 0)) errors.push("Price must be a valid number and cannot be negative");
+
+    const numericStockCount = price !== undefined ? Number(price) : undefined;
+    if (numericStockCount !== undefined && (isNaN(numericStockCount) || numericStockCount < 0)) errors.push("Stock count must be a valid number and cannot be negative");
+
+    if (errors.length > 0) {
+        return next(new AppError("Validation failed", 400, errors));
+    }
 
     try {
-        const product = await prisma.product.update({
-            where: { id },
-            data: {
-                name,
-                category,
-                description,
-                price,
-                stockCount,
-                brand,
-                imageUrl,
-                isAvailable
-            }
+        const product = await productModel.update(id, {
+            name,
+            category,
+            description,
+            price,
+            stockCount,
+            brand,
+            imageUrl,
+            isAvailable
         });
 
         res.status(200).json(product);
@@ -118,9 +138,7 @@ const deleteProduct = async (req: Request, res: Response, next: NextFunction) =>
     const { id } = req.params;
 
     try {
-        const product = await prisma.product.delete({
-            where: { id }
-        });
+        await productModel.delete(id);
 
         res.status(200).json({ message: "Product is deleted" });
     } catch (err) {
