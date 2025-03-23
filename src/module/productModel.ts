@@ -1,9 +1,9 @@
-import prisma from "../config/prisma";
+import prisma from "../config/prismaClient";
 
 export interface Product {
     id: string;
     name: string;
-    category?: string;
+    categoryId?: string;
     description?: string;
     price: number;
     stockCount: number;
@@ -31,15 +31,38 @@ const productModel = {
     },
 
     async create(product: Omit<Product, "id">) {
+        let categoryId: string | null = null;
+    
+        if (product.categoryId) {
+            const categoryRecord = await prisma.category.findFirst({
+                where: { name: product.categoryId },  
+                select: { id: true }
+            });
+    
+            if (!categoryRecord) {
+                throw new Error(`Category "${product.categoryId}" not found`);
+            }
+    
+            categoryId = categoryRecord.id;  
+        }
+    
         return await prisma.product.create({
-            data: product
+            data: {
+                ...product,
+                categoryId  
+            }
         });
     },
-
+    
     async update(id: string, updates: Partial<Product>) {
+        const { categoryId, ...rest } = updates;
+
         return await prisma.product.update({
             where: { id },
-            data: updates
+            data: {
+                ...rest,
+                category: categoryId ? { connect: { id: categoryId } } : undefined 
+            }
         });
     },
 

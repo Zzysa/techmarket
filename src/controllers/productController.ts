@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { v4 as uuidv4 } from "uuid";
 import productModel, { Product } from "../module/productModel";
-import prisma from "../config/prisma";
 import { AppError } from "../middleware/AppError";
 
 const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
@@ -53,9 +51,7 @@ const getProduct = async (req: Request, res: Response, next: NextFunction) => {
         const product = await productModel.getById(id)
 
         if (!product) {
-            const error = new Error("Product not found");
-            (error as any).status = 404;
-            return next(error);
+            return next(new AppError("/Product not found/", 404));
         }
 
         res.json(product);
@@ -66,7 +62,7 @@ const getProduct = async (req: Request, res: Response, next: NextFunction) => {
 
 const postProduct = async (req: Request, res: Response, next: NextFunction) => {
     const {
-        name, category, description, price, stockCount, brand, imageUrl, isAvailable
+        name, categoryId, description, price, stockCount, brand, imageUrl, isAvailable
     }: Omit<Product, "id"> = req.body;
 
     let errors: string[] = [];
@@ -83,7 +79,7 @@ const postProduct = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const product = await productModel.create({
             name,
-            category,
+            categoryId,
             description,
             price,
             stockCount,
@@ -100,8 +96,9 @@ const postProduct = async (req: Request, res: Response, next: NextFunction) => {
 
 const changeProduct = async (req: Request, res: Response, next: NextFunction) => {
     const { id } = req.params;
+
     const {
-        name, category, description, price, stockCount, brand, imageUrl, isAvailable 
+        name, categoryId, description, price, stockCount, brand, imageUrl, isAvailable 
     }: Partial<Omit<Product, "id">> = req.body;
 
     let errors: string[] = [];
@@ -117,9 +114,15 @@ const changeProduct = async (req: Request, res: Response, next: NextFunction) =>
     }
 
     try {
+        const productTest = await productModel.getById(id);
+        
+        if (!productTest) {
+            return next(new AppError("Product not found", 404));  
+        }
+
         const product = await productModel.update(id, {
             name,
-            category,
+            categoryId,
             description,
             price,
             stockCount,
