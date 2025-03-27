@@ -8,18 +8,19 @@ datasource db {
 }
 
 model Product {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   name        String
   description String?
   price       Float
   stockCount  Int
   brand       String?
   imageUrl    String?
-  isAvailable Boolean   @default(true)
-  createdAt   DateTime  @default(now())
+  isAvailable Boolean    @default(true)
+  createdAt   DateTime   @default(now())
   categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id])
+  category    Category?  @relation(fields: [categoryId], references: [id])
   reviews     Review[]
+  cartItems   CartItem[]
 }
 
 model Category {
@@ -30,21 +31,35 @@ model Category {
 }
 
 model User {
-  id            String    @id @default(uuid())
+  id            String     @id @default(uuid())
   username      String
-  email         String    @unique
+  email         String     @unique
   password_hash String
   first_name    String?
   last_name     String?
   reviews       Review[]
+  cartItems     CartItem[]
 }
 
 model Review {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   rating    Int
   comment   String?
   productId String
   userId    String
-  product   Product  @relation(fields: [productId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  amount    Int      @default(1)
+  addedAt   DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
 }

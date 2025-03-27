@@ -5,7 +5,7 @@ import errorHandler from './middleware/errorHandler';
 import reviewRouter from './routes/reviewRoutes';
 import userRouter from './routes/userRoutes';
 import categoryRouter from './routes/categoryRoutes';
-import http from "http";
+import cartRouter from './routes/cartRoutes';
 
 dotenv.config()
 const app = express();
@@ -15,6 +15,7 @@ app.use("/categories", categoryRouter);
 app.use('/products', productRoutes);
 app.use("/reviews", reviewRouter);
 app.use("/users", userRouter);
+app.use("/cartItem", cartRouter);
 app.use(errorHandler);
 
 const startServer = (port: number) => {
