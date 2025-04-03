@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import userModel from "../module/userModel";
 import { AppError } from "../middleware/AppError";
 import { User } from "../module/userModel";
-import bcrypt from "bcrypt";
 
 const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -27,7 +26,7 @@ const getUser = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-const postUser = async (req: Request, res: Response, next: NextFunction) => {
+const createUser = async (req: Request, res: Response, next: NextFunction) => {
     const { username, email, password_hash, first_name, last_name } = req.body;
     let errors: string[] = [];
 
@@ -86,7 +85,7 @@ const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
 export default {
     getAllUsers,
     getUser,
-    postUser,
+    createUser,
     updateUser,
     deleteUser
 };

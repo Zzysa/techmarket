@@ -1,152 +1,204 @@
-jest.mock("../config/prismaClient", () => require("../__mocks__/prismaClient"));
-import request from "supertest";
-import { app, server } from "../server";
-import mockPrisma from "../__mocks__/prismaClient";
-import { v4 as uuidv4 } from "uuid";
-import { AppError } from "../middleware/AppError";
+import { Request, Response, NextFunction } from 'express';
+import productController from '../controllers/productController';
 
-describe("Product Routes", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+jest.mock('../module/productModel', () => ({
+  getAll: jest.fn(),
+  getById: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn()
+}));
 
-    describe("GET /products", () => {
-        test("should return a list of products", async () => {
-            mockPrisma.product.findMany.mockResolvedValueOnce([
-                { id: uuidv4(), name: "Product A", description: "Desc A", price: 10.0, stockCount: 100, isAvailable: true },
-                { id: uuidv4(), name: "Product B", description: "Desc B", price: 20.0, stockCount: 50, isAvailable: false },
-            ]);
+jest.mock('mongoose', () => ({
+  Types: {
+    ObjectId: {
+      isValid: jest.fn()
+    }
+  }
+}));
 
-            const response = await request(app).get("/products");
+jest.mock('../middleware/AppError', () => ({
+  AppError: jest.fn().mockImplementation((message, statusCode, errors) => ({
+    message,
+    statusCode,
+    errors: errors || []
+  }))
+}));
 
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveLength(2);
-            expect(response.body[0].name).toBe("Product A");
-            expect(mockPrisma.product.findMany).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    describe("GET /products/:id", () => {
-        test("should return 200 if found", async () => {
-            const productId = uuidv4();
+describe('Product Controller Tests', () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: jest.MockedFunction<NextFunction>;
+  
+  const productModel = require('../module/productModel');
+  const mongoose = require('mongoose');
+  const { AppError } = require('../middleware/AppError');
+  
+  beforeEach(() => {
+    jest.clearAllMocks();
     
-            mockPrisma.product.findUnique.mockResolvedValueOnce(
-                {
-                    id: productId,
-                    name: "Product A",
-                    price: 10.0,
-                    stockCount: 100, 
-                    isAvailable: true
-                }
-            );
+    req = {};
+    res = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis()
+    };
+    next = jest.fn();
+  });
+  
+  test('getAllProducts should return products', async () => {
+    req.query = {};
     
-            const response = await request(app).get(`/products/${productId}`);
+    const mockProducts = [
+      { id: '1', name: 'Product 1', price: 10 },
+      { id: '2', name: 'Product 2', price: 20 }
+    ];
+    productModel.getAll.mockResolvedValue(mockProducts);
     
-            expect(response.status).toBe(200);
-            expect(response.body.id).toBe(productId);
-        });
-
-        test("should return 404 if not found", async () => {
-            mockPrisma.product.findUnique.mockResolvedValueOnce(null);
-
-            const response = await request(app).get("/products/999");
-            expect(response.status).toBe(404);
-            expect(response.body.error).toMatch(/Product not found/i);
-        });
-    });
-
-    describe("PATCH /products/:id", () => {
-        test("should update partial category fields", async () => {
-            const id = uuidv4();
-
-            mockPrisma.product.findUnique.mockResolvedValueOnce(
-                {
-                    id: id,
-                    name: "Product A",
-                    price: 10.0,
-                    stockCount: 100, 
-                    isAvailable: true
-                }
-            );
-
-            mockPrisma.product.update.mockResolvedValueOnce(
-                {
-                    id: id,
-                    name: "Updated Name",
-                    stockCount: 200, 
-                }
-            );
-
-            const response = await request(app).patch(`/products/${id}`).send({
-                name: "Updated Name",
-                stockCount: 200,
-            });
-
-            console.log(response.body)
-
-            expect(response.status).toBe(200);
-            expect(response.body.name).toBe("Updated Name");
-            expect(mockPrisma.product.update).toHaveBeenCalledWith({
-                where: { id: id },
-                data: { 
-                    name: "Updated Name",
-                    stockCount: 200,
-                },
-            });
-        });
-    });
-
-    describe("POST /products/:id", () => {
-        test("should create a product", async () => {
-            const productId = uuidv4();
-
-            mockPrisma.product.create.mockResolvedValueOnce({
-                id: productId,
-                name: "New Product",
-                description: "Product desc",
-                price: 15.99,
-                stockCount: 30,
-                isAvailable: true
-            });
-
-            const response = await request(app).post("/products").send({
-                name: "New Product",
-                description: "Product desc",
-                price: 15.99,
-                stockCount: 30,
-                isAvailable: true
-            });
-
-            expect(response.status).toBe(201);
-            expect(response.body.id).toBe(productId);
-            expect(mockPrisma.product.create).toHaveBeenCalledTimes(1);
-        });
-    });  
+    await productController.getAllProducts(req as Request, res as Response, next);
     
-    describe("DELETE /products/:id", () => {
-        test("should delete product if exists", async () => {
-            mockPrisma.product.delete.mockResolvedValueOnce({
-                id: 9,
-                name: "To be deleted"
-            });
-
-            const response = await request(app).delete("/products/9");
-            expect(response.status).toBe(200);
-            expect(response.body.message).toMatch(/Product is deleted/);
-            expect(mockPrisma.product.delete).toHaveBeenCalledTimes(1);
-        });
-
-        test("should return 404 if product not found", async () => {
-            mockPrisma.product.delete.mockRejectedValueOnce(new AppError("Product not found", 404));
-        
-            const response = await request(app).delete("/products/999");
-        
-            expect(response.status).toBe(404);
-            expect(response.body.error).toMatch(/Product not found/i);
-        });
+    expect(productModel.getAll).toHaveBeenCalledWith({});
+    expect(res.json).toHaveBeenCalledWith(mockProducts);
+  });
+  
+  test('getAllProducts should filter by availability', async () => {
+    req.query = { isAvailable: 'true' };
+    
+    const mockProducts = [{ id: '1', name: 'Product 1', price: 10, isAvailable: true }];
+    productModel.getAll.mockResolvedValue(mockProducts);
+    
+    await productController.getAllProducts(req as Request, res as Response, next);
+    
+    expect(productModel.getAll).toHaveBeenCalledWith({ isAvailable: true });
+    expect(res.json).toHaveBeenCalledWith(mockProducts);
+  });
+  
+  test('getProduct should return a product by id', async () => {
+    req.params = { id: '123' };
+    
+    const mockProduct = { id: '123', name: 'Product 1', price: 10 };
+    productModel.getById.mockResolvedValue(mockProduct);
+    mongoose.Types.ObjectId.isValid.mockReturnValue(true);
+    
+    await productController.getProduct(req as Request, res as Response, next);
+    
+    expect(productModel.getById).toHaveBeenCalledWith('123');
+    expect(res.json).toHaveBeenCalledWith(mockProduct);
+  });
+  
+  test('getProduct should handle not found', async () => {
+    req.params = { id: '123' };
+    
+    productModel.getById.mockResolvedValue(null);
+    mongoose.Types.ObjectId.isValid.mockReturnValue(true);
+    
+    await productController.getProduct(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('Product not found', 404);
+  });
+  
+  test('postProduct should create a product', async () => {
+    req.body = {
+      name: 'New Product',
+      price: 15.99,
+      stockCount: 30,
+      isAvailable: true
+    };
+    
+    const expectedData = {
+      name: 'New Product',
+      price: 15.99,
+      stockCount: 30,
+      isAvailable: true,
+      averageRating: 0,
+      reviewsCount: 0,
+      description: undefined,
+      brand: undefined,
+      imageUrl: undefined
+    };
+    
+    const mockProduct = { id: 'new-id', ...req.body };
+    productModel.create.mockResolvedValue(mockProduct);
+    
+    await productController.postProduct(req as Request, res as Response, next);
+    
+    expect(productModel.create).toHaveBeenCalledWith(expectedData);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(mockProduct);
+  });
+  
+  test('postProduct should validate required fields', async () => {
+    req.body = {
+      price: -10
+    };
+    
+    await productController.postProduct(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('Validation failed', 400, expect.arrayContaining(['Name is required', 'Price must be a positive number']));
+  });
+  
+  test('changeProduct should update a product', async () => {
+    req.params = { id: '123' };
+    req.body = {
+      name: 'Updated Name',
+      price: 25.99
+    };
+    
+    const existingProduct = { id: '123', name: 'Original Name', price: 10 };
+    const updatedProduct = { ...existingProduct, ...req.body };
+    
+    mongoose.Types.ObjectId.isValid.mockReturnValue(true);
+    productModel.getById.mockResolvedValue(existingProduct);
+    productModel.update.mockResolvedValue(updatedProduct);
+    
+    await productController.changeProduct(req as Request, res as Response, next);
+    
+    expect(productModel.update).toHaveBeenCalledWith('123', {
+      name: 'Updated Name',
+      price: 25.99
     });
-
-    afterAll(() => {
-        server.close();
-    });
+    expect(res.json).toHaveBeenCalledWith(updatedProduct);
+  });
+  
+  test('changeProduct should handle not found', async () => {
+    req.params = { id: '123' };
+    req.body = { name: 'Updated Name' };
+    
+    mongoose.Types.ObjectId.isValid.mockReturnValue(true);
+    productModel.getById.mockResolvedValue(null);
+    
+    await productController.changeProduct(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('Product not found', 404);
+  });
+  
+  test('deleteProduct should delete a product', async () => {
+    req.params = { id: '123' };
+    
+    const existingProduct = { id: '123', name: 'Product to delete', price: 10 };
+    
+    mongoose.Types.ObjectId.isValid.mockReturnValue(true);
+    productModel.getById.mockResolvedValue(existingProduct);
+    productModel.delete.mockResolvedValue(true);
+    
+    await productController.deleteProduct(req as Request, res as Response, next);
+    
+    expect(productModel.delete).toHaveBeenCalledWith('123');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ message: 'Product is deleted' });
+  });
+  
+  test('deleteProduct should handle not found', async () => {
+    req.params = { id: '123' };
+    
+    mongoose.Types.ObjectId.isValid.mockReturnValue(true);
+    productModel.getById.mockResolvedValue(null);
+    
+    await productController.deleteProduct(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('Product not found', 404);
+  });
 });

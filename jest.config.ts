@@ -11,7 +11,7 @@ module.exports = {
       useESM: true,
     },
   },
-
+  setupFilesAfterEnv: ["./jest.setup.ts"],
   extensionsToTreatAsEsm: [".ts"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",

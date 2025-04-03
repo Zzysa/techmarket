@@ -1,140 +1,182 @@
-jest.mock("../config/prismaClient", () => require("../__mocks__/prismaClient"));
-import request from "supertest";
-import { app, server } from "../server";
-import mockPrisma from "../__mocks__/prismaClient";
-import { v4 as uuidv4 } from "uuid";
-import { AppError } from "../middleware/AppError";
+import { Request, Response, NextFunction } from 'express';
+import userController from '../controllers/userController';
 
-describe("User Routes", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+jest.mock('../module/userModel', () => ({
+  getAll: jest.fn(),
+  getById: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn()
+}));
 
-    describe("GET /users", () => {
-        test("should return a list of users", async () => {
-            mockPrisma.user.findMany.mockResolvedValueOnce([
-                { id: uuidv4(), username: "John Doe", email: "john@example.com", password_hash: "123" },
-                { id: uuidv4(), username: "Jane Smith", email: "jane@example.com", password_hash: "123" },
-            ]);
+jest.mock('../middleware/AppError', () => ({
+  AppError: jest.fn().mockImplementation((message, statusCode, errors) => ({
+    message,
+    statusCode,
+    errors: errors || []
+  }))
+}));
 
-            const response = await request(app).get("/users");
-
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveLength(2);
-            expect(response.body[0].username).toBe("John Doe");
-            expect(mockPrisma.user.findMany).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    describe("GET /users/:id", () => {
-        test("should return 200 if found", async () => {
-            const userId = uuidv4();
-
-            mockPrisma.user.findUnique.mockResolvedValueOnce({ 
-                id: userId,
-                username: "John Doe",
-                email: "john@example.com",
-                password_hash: "123" 
-            })
-
-            const response = await request(app).get(`/users/${userId}`);
-
-            expect(response.status).toBe(200);
-            expect(response.body.id).toBe(userId);
-        });
-
-        test("should return 404 if not found", async () => {
-            mockPrisma.user.findUnique.mockResolvedValueOnce(null);
-            const response = await request(app).get("/users/999");
-            console.log(response.body); 
-            expect(response.status).toBe(404);
-            expect(response.body.error).toMatch(/User not found/i);
-        });
-    });
-
-    describe("DELETE /users/:userId", () => {
-        test("should delete user if exists", async () => {
-            mockPrisma.user.delete.mockResolvedValueOnce({
-                id: 9,
-                name: "To be deleted",
-            });
-
-            const response = await request(app).delete("/users/9");
-            expect(response.status).toBe(200);
-            expect(response.body.message).toMatch(/User deleted successfully/);
-            expect(mockPrisma.user.delete).toHaveBeenCalledTimes(1);
-        });
-
-        test("should return 404 if user not found", async () => {
-            mockPrisma.user.delete.mockRejectedValueOnce(new AppError("User not found", 404));
-        
-            const response = await request(app).delete("/users/999");
-        
-            expect(response.status).toBe(404);
-            expect(response.body.error).toMatch(/User not found/i);
-        });
-    });
-
-    describe("PATCH /users/:id", () => {
-        test("should update partial user fields", async () => {
-            const id = uuidv4();
-
-            mockPrisma.user.findUnique.mockResolvedValueOnce({ 
-                id: id,
-                username: "John Doe",
-                email: "john@example.com",
-                password_hash: "123",
-            })
-
-            mockPrisma.user.update.mockResolvedValueOnce({ 
-                id: id,
-                username: "Stas Doe",
-                password_hash: "55555" 
-            })
-
-            const response = await request(app).patch(`/users/${id}`).send({
-                username: "Stas Doe",
-                password_hash: "55555" 
-            });
-
-            console.log(response.body)
-
-            expect(response.status).toBe(200);
-            expect(response.body.username).toBe("Stas Doe");
-            expect(mockPrisma.user.update).toHaveBeenCalledWith({
-                where: { id: id },
-                data: { 
-                    username: "Stas Doe",
-                    password_hash: "55555" 
-                },
-            });
-        });
-    });
-
-
-    describe("POST /users", () => {
-        test("should create a new user", async () => {  
-            const newUser = {
-                username: "John Doe",
-                email: "john@example.com",
-                password_hash: "123",
-            };
-
-            mockPrisma.user.create.mockResolvedValueOnce({
-                id: uuidv4(),
-                ...newUser,
-            });
-
-            const response = await request(app).post("/users").send(newUser);
-
-            expect(response.status).toBe(201);
-            expect(response.body.username).toBe(newUser.username);
-            expect(response.body.email).toBe(newUser.email);
-            expect(mockPrisma.user.create).toHaveBeenCalledTimes(1);
-        });
-    });
-
-    beforeAll(() => {
-        server.close()
-    });
+describe('User Controller Tests', () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: jest.MockedFunction<NextFunction>;
+  
+  const userModel = require('../module/userModel');
+  const { AppError } = require('../middleware/AppError');
+  
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    req = {};
+    res = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis()
+    };
+    next = jest.fn();
+  });
+  
+  test('getAllUsers should return users', async () => {
+    const mockUsers = [
+      { id: '1', username: 'john', email: 'john@example.com' },
+      { id: '2', username: 'jane', email: 'jane@example.com' }
+    ];
+    userModel.getAll.mockResolvedValue(mockUsers);
+    
+    await userController.getAllUsers(req as Request, res as Response, next);
+    
+    expect(userModel.getAll).toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(mockUsers);
+  });
+  
+  test('getUser should return a user by id', async () => {
+    req.params = { id: '123' };
+    
+    const mockUser = { id: '123', username: 'john', email: 'john@example.com' };
+    userModel.getById.mockResolvedValue(mockUser);
+    
+    await userController.getUser(req as Request, res as Response, next);
+    
+    expect(userModel.getById).toHaveBeenCalledWith('123');
+    expect(res.json).toHaveBeenCalledWith(mockUser);
+  });
+  
+  test('getUser should handle not found', async () => {
+    req.params = { id: '123' };
+    
+    userModel.getById.mockResolvedValue(null);
+    
+    await userController.getUser(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('User not found', 404);
+  });
+  
+  test('createUser should add a new user', async () => {
+    req.body = {
+      username: 'newuser',
+      email: 'new@example.com',
+      password_hash: 'hashed_password',
+      first_name: 'John',
+      last_name: 'Doe'
+    };
+    
+    const mockUser = { id: 'new-id', ...req.body };
+    userModel.create.mockResolvedValue(mockUser);
+    
+    await userController.createUser(req as Request, res as Response, next);
+    
+    expect(userModel.create).toHaveBeenCalledWith(req.body);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith(mockUser);
+  });
+  
+  test('createUser should validate required fields', async () => {
+    req.body = {
+      email: 'invalid@example.com'
+    };
+    
+    await userController.createUser(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('Validation failed', 400, expect.arrayContaining(['Username is required', 'Password is required']));
+  });
+  
+  test('updateUser should modify user fields', async () => {
+    req.params = { id: '123' };
+    req.body = {
+      username: 'updateduser',
+      first_name: 'Updated',
+      last_name: 'User'
+    };
+    
+    const existingUser = { id: '123', username: 'olduser', email: 'user@example.com' };
+    const updatedUser = { ...existingUser, ...req.body };
+    
+    userModel.getById.mockResolvedValue(existingUser);
+    userModel.update.mockResolvedValue(updatedUser);
+    
+    await userController.updateUser(req as Request, res as Response, next);
+    
+    expect(userModel.update).toHaveBeenCalledWith('123', req.body);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(updatedUser);
+  });
+  
+  test('updateUser should handle not found', async () => {
+    req.params = { id: '123' };
+    req.body = { username: 'updated' };
+    
+    userModel.getById.mockResolvedValue(null);
+    
+    await userController.updateUser(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+    expect(AppError).toHaveBeenCalledWith('User not found', 404);
+  });
+  
+  test('deleteUser should remove a user', async () => {
+    req.params = { id: '123' };
+    
+    const existingUser = { id: '123', username: 'user', email: 'user@example.com' };
+    
+    userModel.getById.mockResolvedValue(existingUser);
+    userModel.delete.mockResolvedValue(true);
+    
+    await userController.deleteUser(req as Request, res as Response, next);
+    
+    expect(userModel.delete).toHaveBeenCalledWith('123');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ message: 'User deleted successfully' });
+  });
+  
+  test('deleteUser should handle not found error', async () => {
+    req.params = { id: '123' };
+    
+    userModel.delete.mockRejectedValue(new Error('User not found'));
+    
+    await userController.deleteUser(req as Request, res as Response, next);
+    
+    expect(next).toHaveBeenCalled();
+  });
+  
+  test('updateUser with invalid email should pass through (not validated)', async () => {
+    req.params = { id: '123' };
+    req.body = {
+      email: 'invalid-email',
+      username: 'user'
+    };
+    
+    const existingUser = { id: '123', username: 'user', email: 'user@example.com' };
+    const updatedUser = { ...existingUser, ...req.body };
+    
+    userModel.getById.mockResolvedValue(existingUser);
+    userModel.update.mockResolvedValue(updatedUser);
+    
+    await userController.updateUser(req as Request, res as Response, next);
+    
+    expect(userModel.update).toHaveBeenCalledWith('123', req.body);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(updatedUser);
+  });
 });

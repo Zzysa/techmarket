@@ -1,51 +1,61 @@
-import prisma from "../config/prismaClient";
-import bcrypt from "bcrypt";
+import User, { IUser } from '../models/User';
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 export interface User {
-    id: string;
-    username: string;
-    email: string;
-    password_hash: string;
-    first_name?: string;
-    last_name?: string;
+  id: string;
+  username: string;
+  email: string;
+  password_hash: string;
+  first_name?: string;
+  last_name?: string;
 }
 
 const userModel = {
-    async getAll() {
-        return await prisma.user.findMany();
-    },
+  async getAll(): Promise<IUser[]> {
+    return await User.find().exec();
+  },
 
-    async getById(id: string) {
-        return await prisma.user.findUnique({
-            where: { id }
-        });
-    },
-
-    async create(user: Omit<User, "id">) {
-        const hashedPassword = await bcrypt.hash(user.password_hash, 10);
-        return await prisma.user.create({
-            data: {
-                username: user.username,
-                email: user.email,
-                password_hash: hashedPassword,
-                first_name: user.first_name,
-                last_name: user.last_name
-            },
-        });
-    },
-
-    async update(id: string, updates: Partial<User>) {
-        return await prisma.user.update({
-            where: { id },
-            data: updates,
-        });
-    },
-
-    async delete(id: string) {
-        await prisma.user.delete({
-            where: { id }
-        });
+  async getById(id: string): Promise<IUser | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
     }
+    return await User.findById(id).exec();
+  },
+
+  async create(user: Omit<User, "id">): Promise<IUser> {
+    const hashedPassword = await bcrypt.hash(user.password_hash, 10);
+    const newUser = new User({
+      ...user,
+      password_hash: hashedPassword
+    });
+    return await newUser.save();
+  },
+
+  async update(id: string, updates: Partial<User>): Promise<IUser | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+    
+    if (updates.password_hash) {
+      updates.password_hash = await bcrypt.hash(updates.password_hash, 10);
+    }
+    
+    return await User.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true }
+    ).exec();
+  },
+
+  async delete(id: string): Promise<boolean> {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return false;
+    }
+    
+    const result = await User.findByIdAndDelete(id).exec();
+    return !!result;
+  }
 };
 
 export default userModel;

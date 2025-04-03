@@ -1,42 +1,36 @@
 import express from 'express';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import productRoutes from './routes/productRoutes';
-import dotenv from "dotenv"
 import errorHandler from './middleware/errorHandler';
-import reviewRouter from './routes/reviewRoutes';
-import userRouter from './routes/userRoutes';
-import categoryRouter from './routes/categoryRoutes';
-import cartRouter from './routes/cartRoutes';
 
-dotenv.config()
-const app = express();
+dotenv.config();
 
-app.use(express.json());
-app.use("/categories", categoryRouter);
-app.use('/products', productRoutes);
-app.use("/reviews", reviewRouter);
-app.use("/users", userRouter);
-app.use("/cartItem", cartRouter);
-app.use(errorHandler);
-
-const startServer = (port: number) => {
-  const server = app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-  });
-
-  server.on("error", (err: any) => {
-    if (err.code === "EADDRINUSE") {
-      const newPort = port + 1;
-      console.log(`Port ${port} is in use, trying port ${newPort}...`);
-      startServer(newPort); 
-    } else {
-      console.error("Server error:", err);
+const connectToDatabase = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/techmarket');
+    console.log('Connected to MongoDB');
+    return true;
+  } catch (error) {
+    console.error('Error connecting to MongoDB:', error);
+    if (process.env.NODE_ENV !== 'test') {
+      process.exit(1);
     }
-  });
-
-  return server;
+    return false;
+  }
 };
 
-const PORT = Number(process.env.SERVER_PORT) || 3001;
-const server = startServer(PORT);
+const app = express();
+
+connectToDatabase();
+
+app.use(express.json());
+app.use('/products', productRoutes);
+app.use(errorHandler);
+
+const PORT = Number(process.env.PORT) || 3000;
+const server = app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 export { app, server };
